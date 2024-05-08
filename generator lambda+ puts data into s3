@@ -1,0 +1,63 @@
+import csv
+import boto3
+import tempfile
+from random import randint, choice
+from datetime import datetime
+
+# Initialize S3 client
+s3 = boto3.client('s3')
+
+# Define customer and bank names
+customer_names = ["John Doe", "Jane Smith", "Michael Brown", "Sarah Lee", "David Miller"]
+bank_names = ["Citibank", "Chase", "Bank of America", "Wells Fargo", "PNC"]
+
+# Define debit card types
+card_types = ["Visa", "Mastercard"]
+
+# Define number of transactions per day
+transactions_per_day = 10
+
+def generate_transaction():
+    """Generates a mock transaction"""
+    customer_id = randint(1000000000, 9999999999)
+    customer_name = choice(customer_names)
+    debit_card_number = f"{randint(1000, 9999)}-{randint(1000, 9999)}-{randint(1000, 9999)}-{randint(1000, 9999)}"
+    debit_card_type = choice(card_types)
+    bank_name = choice(bank_names)
+    transaction_date = datetime.now().strftime("%Y-%m-%d")
+    amount_spend = round(randint(10, 100) + randint(0, 99) / 100, 2)
+    return [customer_id, customer_name, debit_card_number, debit_card_type, bank_name, transaction_date, amount_spend]
+
+def generate_daily_transactions():
+    """Generates daily transactions and saves to CSV"""
+    rows = [["customer_id", "name", "debit_card_number", "debit_card_type", "bank_name", "transaction_date", "amount_spend"]]
+    for _ in range(transactions_per_day):
+        transaction = generate_transaction()
+        rows.append(transaction)
+
+    # Create a temporary file to write CSV data
+    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.csv') as temp_file:
+        csv_writer = csv.writer(temp_file)
+        csv_writer.writerows(rows)
+        temp_file_path = temp_file.name  # Get the file path of the temporary file
+
+    return temp_file_path
+
+def upload_to_s3(file_path, s3_bucket, s3_key):
+    """Uploads a file to S3 bucket"""
+    with open(file_path, 'rb') as data:
+        s3.upload_fileobj(data, s3_bucket, s3_key)
+
+def lambda_handler(event, context):
+    """Lambda function handler to generate daily transaction data and upload to S3"""
+    temp_file_path = generate_daily_transactions()
+
+    # Upload the CSV file to S3
+    s3_bucket = 'bank-details-ass5'
+    s3_key = f"data/date={datetime.now().strftime('%Y-%m-%d')}/transactions.csv"
+    upload_to_s3(temp_file_path, s3_bucket, s3_key)
+
+    return {
+        'statusCode': 200,
+        'body': 'Generated daily transaction CSV file and uploaded to S3'
+    }
